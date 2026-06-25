@@ -141,7 +141,7 @@ model Group {
 // Group Members (Junction Table)
 model GroupMember {
   groupId   String
-  personId  String
+  personId  String @map("contactId")
 
   group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
