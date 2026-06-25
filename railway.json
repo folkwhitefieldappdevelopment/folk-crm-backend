@@ -1,5 +1,6 @@
 {
   "deploy": {
+    "startCommand": "node dist/src/main",
     "healthcheckPath": "/health"
   }
 }
