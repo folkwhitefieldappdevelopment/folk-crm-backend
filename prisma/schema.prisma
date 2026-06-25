@@ -18,7 +18,7 @@ model User {
   email         String   @unique
   phone         String   @default("")
   role          String   @default("[]") // JSON array
-  photoUrl      String   @default("")
+  photoUrl      String?
   createdAt     DateTime @default(now())
   fgCode        String?
   reportsTo     String?  // JSON
@@ -44,15 +44,15 @@ model Person {
   fullName      String   @default("Unknown Contact")
   fullNameLowercase String @default("")
   phone         String
-  photoUrl      String   @default("")
+  photoUrl      String?
   age           Int      @default(0)
   currentFolkStage String @default("FreshLead")
-  location      String   @default("")
-  stayingWith   String   @default("")
-  occupation    String   @default("")
-  organisation  String   @default("")
+  location      String?
+  stayingWith   String?
+  occupation    String?
+  organisation  String?
   rentDetails   Float    @default(0)
-  nativePlace   String   @default("")
+  nativePlace   String?
   sgRating      Float    @default(0)
   contactSource String   @default("[]") // JSON array
   chantingStatus Int     @default(0)
@@ -64,7 +64,7 @@ model Person {
   folkId        String   @default("")
   createdAt     DateTime @default(now())
   progress      String   @default("[]") // JSON ProgressCategory[]
-  generalRemarks String  @default("")
+  generalRemarks String?
   callHistory   String   @default("[]") // JSON CallLog[]
   attendanceHistory String @default("[]") // JSON AttendanceEntry[]
   relationshipStatus String @default("Single")
@@ -110,9 +110,9 @@ model Person {
 model Group {
   id            String   @id @default(uuid())
   name          String
-  description   String   @default("")
-  photoUrl      String   @default("")
-  createdBy     String
+  description   String?
+  photoUrl      String?
+  createdBy     String?
   createdByName String   @default("")
   creatorRole   String   @default("[]") // JSON array
   sharedWithUserIds String @default("[]") // JSON array
@@ -130,7 +130,7 @@ model Group {
   reportRecipients String @default("[]") // JSON array
 
   // Relations
-  owner         User     @relation("GroupOwner", fields: [createdBy], references: [id])
+  owner         User?    @relation("GroupOwner", fields: [createdBy], references: [id])
   members       GroupMember[]
   events        GroupEvent[]
   attendance    Attendance[]
@@ -140,14 +140,13 @@ model Group {
 
 // Group Members (Junction Table)
 model GroupMember {
-  id        String @id @default(uuid())
   groupId   String
   personId  String
 
   group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@unique([groupId, personId])
+  @@id([groupId, personId])
   @@map("group_members")
 }
 
