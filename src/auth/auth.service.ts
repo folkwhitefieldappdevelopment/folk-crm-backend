@@ -178,9 +178,47 @@ export class AuthService {
       return { message: 'If the email exists, a reset link has been sent.' };
     }
 
-    // In production, send an email with a reset link
-    // For now, just acknowledge
-    return { message: 'If the email exists, a reset link has been sent.' };
+    const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password reset successfully.', tempPassword };
+  }
+
+  async setInitialPassword(email: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.password) {
+      throw new UnauthorizedException('Password already set. Use change password instead.');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    const payload = { sub: user.id, email: user.email };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: JSON.parse(user.role || '[]'),
+        photoUrl: user.photoUrl,
+        fgCode: user.fgCode,
+      },
+    };
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
