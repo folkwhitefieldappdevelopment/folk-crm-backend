@@ -11,7 +11,12 @@ async function bootstrap() {
   
   // Enable CORS
   app.enableCors({
-    origin: ['http://localhost:9002', 'http://localhost:8081'],
+    origin: [
+      'http://localhost:9002',
+      'http://localhost:8081',
+      'https://studio-spwarrior.vercel.app',
+      'https://studio-folkwhitefieldappdevelopment-spwarrior.vercel.app',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });

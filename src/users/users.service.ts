@@ -9,12 +9,24 @@ export class UsersService {
   async findAll() {
     return this.prisma.user.findMany({
       orderBy: { name: 'asc' },
+      select: {
+        id: true, name: true, email: true, phone: true,
+        role: true, photoUrl: true, createdAt: true,
+        fgCode: true, reportsTo: true,
+        pausedCallingSession: true, whatsappTemplate: true,
+      },
     });
   }
 
   async findOne(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
+      select: {
+        id: true, name: true, email: true, phone: true,
+        role: true, photoUrl: true, createdAt: true,
+        fgCode: true, reportsTo: true,
+        pausedCallingSession: true, whatsappTemplate: true,
+      },
     });
   }
 
