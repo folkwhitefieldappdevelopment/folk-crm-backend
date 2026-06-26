@@ -43,6 +43,14 @@ export class GroupsController {
     return this.groupsService.addMembers(id, personIds);
   }
 
+  @Post(':id/add-by-phone')
+  async addMembersByPhone(@Param('id') id: string, @Body('phoneNumbers') phoneNumbers: string[]) {
+    if (!Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
+      throw new BadRequestException('phoneNumbers must be a non-empty array');
+    }
+    return this.groupsService.addMembersByPhone(id, phoneNumbers);
+  }
+
   @Delete(':id/members/:personId')
   async removeMember(@Param('id') id: string, @Param('personId') personId: string) {
     return this.groupsService.removeMember(id, personId);

@@ -82,6 +82,35 @@ export class GroupsService {
     return { success: true, memberCount };
   }
 
+  async addMembersByPhone(groupId: string, phoneNumbers: string[]) {
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+    });
+    if (!group) throw new Error('Group not found');
+
+    const people = await this.prisma.person.findMany({
+      where: { phone: { in: phoneNumbers }, isDeleted: false },
+    });
+
+    const foundPhones = new Set(people.map(p => p.phone));
+    const notFound = phoneNumbers.filter(p => !foundPhones.has(p));
+
+    const personIds = people.map(p => p.id);
+    if (personIds.length > 0) {
+      await this.prisma.groupMember.createMany({
+        data: personIds.map(personId => ({ groupId, personId })),
+      });
+    }
+
+    const memberCount = await this.prisma.groupMember.count({ where: { groupId } });
+    await this.prisma.group.update({
+      where: { id: groupId },
+      data: { memberCount },
+    });
+
+    return { added: personIds.length, notFound: notFound.length, memberCount };
+  }
+
   async removeMember(groupId: string, personId: string) {
     await this.prisma.groupMember.deleteMany({
       where: {
