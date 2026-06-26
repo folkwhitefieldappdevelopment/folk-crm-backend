@@ -10,6 +10,8 @@ import { CallingSessionsModule } from './calling-sessions/calling-sessions.modul
 import { EventsModule } from './events/events.module';
 import { AuditsModule } from './audits/audits.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { MailModule } from './mail/mail.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -25,6 +27,8 @@ import { HealthController } from './health.controller';
     EventsModule,
     AuditsModule,
     NotificationsModule,
+    DashboardModule,
+    MailModule,
   ],
   controllers: [HealthController],
 })

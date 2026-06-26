@@ -270,6 +270,17 @@ model Audit {
   @@map("audits")
 }
 
+// Mail Queue Table
+model Mail {
+  id        String   @id @default(uuid())
+  to        String   // JSON array of email addresses
+  subject   String
+  html      String
+  createdAt DateTime @default(now())
+
+  @@map("mail")
+}
+
 // Notifications Table
 model Notification {
   id        String   @id @default(uuid())
