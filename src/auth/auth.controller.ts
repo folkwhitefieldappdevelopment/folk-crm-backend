@@ -43,4 +43,10 @@ export class AuthController {
   async resetPassword(@Body() data: { email: string }) {
     return this.authService.resetPassword(data.email);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('password')
+  async changePassword(@Req() req: any, @Body() data: { currentPassword: string; newPassword: string }) {
+    return this.authService.changePassword(req.user.id, data.currentPassword, data.newPassword);
+  }
 }

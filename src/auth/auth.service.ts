@@ -183,6 +183,30 @@ export class AuthService {
     return { message: 'If the email exists, a reset link has been sent.' };
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.password) {
+      throw new UnauthorizedException('Password not set. Please reset your password.');
+    }
+
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
   async logout() {
     return { message: 'Logged out successfully' };
   }
