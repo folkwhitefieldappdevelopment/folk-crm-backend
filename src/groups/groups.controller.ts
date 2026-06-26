@@ -35,6 +35,11 @@ export class GroupsController {
     return this.groupsService.delete(id);
   }
 
+  @Get(':id/members')
+  async getMembers(@Param('id') id: string) {
+    return this.groupsService.getMembers(id);
+  }
+
   @Post(':id/members')
   async addMembers(@Param('id') id: string, @Body('personIds') personIds: string[]) {
     if (!Array.isArray(personIds) || personIds.length === 0) {

@@ -52,6 +52,19 @@ export class GroupsService {
     });
   }
 
+  async getMembers(groupId: string) {
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: {
+          include: { person: true },
+        },
+      },
+    });
+    if (!group) throw new Error('Group not found');
+    return group.members.map(m => m.person);
+  }
+
   async addMembers(groupId: string, personIds: string[]) {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
