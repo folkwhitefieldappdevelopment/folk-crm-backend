@@ -13,6 +13,11 @@ export class PeopleController {
     @Query('search') search?: string,
     @Query('stage') stage?: string,
     @Query('isDeleted') isDeleted?: string,
+    @Query('folkGuideId') folkGuideId?: string,
+    @Query('enablerId') enablerId?: string,
+    @Query('folkStage') folkStage?: string,
+    @Query('lastCallStatus') lastCallStatus?: string,
+    @Query('ids') ids?: string,
   ) {
     const where: Prisma.PersonWhereInput = {};
 
@@ -28,13 +33,34 @@ export class PeopleController {
       where.currentFolkStage = stage as any;
     }
 
+    if (folkStage) {
+      where.currentFolkStage = folkStage as any;
+    }
+
     if (isDeleted !== undefined) {
       where.isDeleted = isDeleted === 'true';
     }
 
+    if (folkGuideId) {
+      where.folkGuideId = folkGuideId;
+    }
+
+    if (enablerId) {
+      where.enablerId = enablerId;
+    }
+
+    if (lastCallStatus) {
+      where.lastCallStatus = lastCallStatus;
+    }
+
+    if (ids) {
+      const idList = ids.split(',').map(id => id.trim());
+      where.id = { in: idList };
+    }
+
     return this.peopleService.findAll({
       skip: skip ? parseInt(skip) : undefined,
-      take: take ? parseInt(take) : 100,
+      take: take ? parseInt(take) : 200,
       where,
       orderBy: { createdAt: 'desc' },
     });
