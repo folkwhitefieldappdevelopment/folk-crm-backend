@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { GroupsModule } from './groups/groups.module';
 import { SettingsModule } from './settings/settings.module';
 import { AuthModule } from './auth/auth.module';
+import { SyncModule } from './sync/sync.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -15,6 +16,7 @@ import { HealthController } from './health.controller';
     GroupsModule,
     SettingsModule,
     AuthModule,
+    SyncModule,
   ],
   controllers: [HealthController],
 })
