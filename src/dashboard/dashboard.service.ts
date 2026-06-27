@@ -15,12 +15,18 @@ export class DashboardService {
 
     const baseWhere: any = { isDeleted: false };
     if (targetFolkGuideId && targetFolkGuideId !== 'all') {
-      baseWhere.folkGuideId = targetFolkGuideId;
+      baseWhere.OR = [
+        { folkGuideId: targetFolkGuideId },
+        { folkGuideId: null, enablerId: null },
+      ];
     }
 
     const myWhere: any = { ...baseWhere };
     if (userId) {
-      myWhere.enablerId = userId;
+      myWhere.OR = [
+        { enablerId: userId },
+        { folkGuideId: null, enablerId: null },
+      ];
     }
 
     const startDate = from ? new Date(from) : new Date();

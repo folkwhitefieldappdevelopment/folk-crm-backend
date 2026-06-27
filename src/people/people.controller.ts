@@ -20,13 +20,16 @@ export class PeopleController {
     @Query('ids') ids?: string,
   ) {
     const where: Prisma.PersonWhereInput = {};
+    const andFilters: Prisma.PersonWhereInput[] = [];
 
     if (search) {
-      where.OR = [
-        { fullName: { contains: search } },
-        { phone: { contains: search } },
-        { location: { contains: search } },
-      ];
+      andFilters.push({
+        OR: [
+          { fullName: { contains: search } },
+          { phone: { contains: search } },
+          { location: { contains: search } },
+        ],
+      });
     }
 
     if (stage) {
@@ -42,11 +45,21 @@ export class PeopleController {
     }
 
     if (folkGuideId) {
-      where.folkGuideId = folkGuideId;
+      andFilters.push({
+        OR: [
+          { folkGuideId },
+          { folkGuideId: null, enablerId: null },
+        ],
+      });
     }
 
     if (enablerId) {
-      where.enablerId = enablerId;
+      andFilters.push({
+        OR: [
+          { enablerId },
+          { folkGuideId: null, enablerId: null },
+        ],
+      });
     }
 
     if (lastCallStatus) {
@@ -58,9 +71,13 @@ export class PeopleController {
       where.id = { in: idList };
     }
 
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
+
     return this.peopleService.findAll({
       skip: skip ? parseInt(skip) : undefined,
-      take: take ? parseInt(take) : 200,
+      take: take ? parseInt(take) : undefined,
       where,
       orderBy: { createdAt: 'desc' },
     });

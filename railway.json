@@ -1,6 +1,6 @@
 {
   "deploy": {
-    "startCommand": "node dist/src/main",
+    "startCommand": "node dist/main",
     "healthcheckPath": "/api/health"
   }
 }

@@ -10,6 +10,11 @@ export class MailController {
     return this.mailService.create(data);
   }
 
+  @Post('send')
+  async send(@Body() data: { to: string[]; subject: string; html: string }) {
+    return this.mailService.send(data);
+  }
+
   @Get()
   async findAll(@Query('skip') skip?: string, @Query('take') take?: string) {
     return this.mailService.findAll(
