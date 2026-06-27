@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { Prisma } from '@prisma/client';
+
+function prepareJsonFields(data: Record<string, any>): Record<string, any> {
+  const prepared: Record<string, any> = { ...data };
+  const jsonFields = ['role', 'reportsTo', 'pausedCallingSession'];
+  for (const field of jsonFields) {
+    if (prepared[field] !== undefined && typeof prepared[field] !== 'string') {
+      prepared[field] = JSON.stringify(prepared[field]);
+    }
+  }
+  return prepared;
+}
 
 @Controller('users')
 export class UsersController {
@@ -31,18 +41,25 @@ export class UsersController {
   }
 
   @Post()
-  async create(@Body() data: Prisma.UserCreateInput) {
-    // Check for duplicate email
+  async create(@Body() data: Record<string, any>) {
     const existing = await this.usersService.findByEmail(data.email);
     if (existing) {
       throw new BadRequestException('Email already exists');
     }
-    return this.usersService.create(data);
+    try {
+      return await this.usersService.create(prepareJsonFields(data));
+    } catch (err) {
+      throw new InternalServerErrorException('Failed to create user');
+    }
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() data: Prisma.UserUpdateInput) {
-    return this.usersService.update(id, data);
+  async update(@Param('id') id: string, @Body() data: Record<string, any>) {
+    try {
+      return await this.usersService.update(id, prepareJsonFields(data));
+    } catch (err) {
+      throw new InternalServerErrorException('Failed to update user');
+    }
   }
 
   @Delete(':id')

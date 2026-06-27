@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -36,16 +35,16 @@ export class UsersService {
     });
   }
 
-  async create(data: Prisma.UserCreateInput) {
+  async create(data: Record<string, any>) {
     return this.prisma.user.create({
-      data,
+      data: data as any,
     });
   }
 
-  async update(id: string, data: Prisma.UserUpdateInput) {
+  async update(id: string, data: Record<string, any>) {
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: data as any,
     });
   }
 
