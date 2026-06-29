@@ -87,9 +87,11 @@ CREATE TABLE IF NOT EXISTS co_enabler_session_people (
 
 -- 2a. Migrate people.callHistory → call_logs
 -- Handles both ISO strings and Firestore timestamp objects: {"_seconds": N, "_nanoseconds": N}
-INSERT INTO call_logs ("personId", "calledAt", status, remark, "calledBy")
+INSERT INTO call_logs (id, "personId", "calledAt", status, remark, "calledBy")
 SELECT
+  gen_random_uuid()::text,
   p.id,
+  CASE
   CASE
     WHEN elem->'calledAt'->>'_seconds' IS NOT NULL THEN
       to_timestamp((elem->'calledAt'->>'_seconds')::bigint)
@@ -105,8 +107,9 @@ CROSS JOIN LATERAL json_array_elements(safe_json_array(p."callHistory")) AS elem
 
 -- 2b. Migrate people.attendanceHistory → attendance table
 -- Skip records where the referenced group doesn't exist (foreign key constraint)
-INSERT INTO attendance ("personId", "groupId", "eventId", date, "markedAt")
+INSERT INTO attendance (id, "personId", "groupId", "eventId", date, "markedAt")
 SELECT DISTINCT ON (p.id, COALESCE(elem->>'eventId', ''), elem->>'date')
+  gen_random_uuid()::text,
   p.id,
   elem->>'groupId',
   elem->>'eventId',
@@ -121,7 +124,7 @@ SELECT DISTINCT ON (p.id, COALESCE(elem->>'eventId', ''), elem->>'date')
   )
 FROM people p
 CROSS JOIN LATERAL json_array_elements(safe_json_array(p."attendanceHistory")) AS elem
-WHERE EXISTS (SELECT 1 FROM groups WHERE id = elem->>'groupId')
+WHERE elem->>'groupId' IS NOT NULL AND EXISTS (SELECT 1 FROM groups WHERE id = elem->>'groupId')
 ON CONFLICT ("personId", "eventId") DO NOTHING;
 
 -- 2c. Migrate people.progress → person_stage_history
