@@ -227,6 +227,19 @@ model CallingSessionPerson {
   @@map("calling_session_people")
 }
 
+// Push Tokens Table
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String
+  platform  String   @default("expo")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("push_tokens")
+}
+
 // Co-Enabler Sessions Table
 model CoEnablerSession {
   id            String   @id @default(uuid())

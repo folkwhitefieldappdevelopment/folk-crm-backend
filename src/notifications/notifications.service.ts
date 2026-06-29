@@ -75,4 +75,15 @@ export class NotificationsService {
 
     return { sentCount: targetUsers.length };
   }
+
+  async registerPushToken(userId: string, token: string, platform: string) {
+    const existing = await this.prisma.pushToken.findFirst({
+      where: { userId, token },
+    });
+    if (existing) return { success: true, message: 'Already registered' };
+    await this.prisma.pushToken.create({
+      data: { userId, token, platform },
+    });
+    return { success: true };
+  }
 }

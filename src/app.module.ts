@@ -14,6 +14,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MailModule } from './mail/mail.module';
 import { ReportModule } from './report/report.module';
+import { CoEnablerModule } from './co-enabler/co-enabler.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -33,6 +34,7 @@ import { HealthController } from './health.controller';
     DashboardModule,
     MailModule,
     ReportModule,
+    CoEnablerModule,
   ],
   controllers: [HealthController],
 })

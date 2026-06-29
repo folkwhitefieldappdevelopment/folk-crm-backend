@@ -29,4 +29,9 @@ export class NotificationsController {
   async broadcast(@Body() data: any) {
     return this.notificationsService.broadcast(data);
   }
+
+  @Post('register')
+  async registerPushToken(@Body() data: { userId: string; token: string; platform?: string }) {
+    return this.notificationsService.registerPushToken(data.userId, data.token, data.platform || 'expo');
+  }
 }
