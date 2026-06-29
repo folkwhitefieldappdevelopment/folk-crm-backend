@@ -34,4 +34,12 @@ export class CallingSessionsController {
   async getByPerson(@Param('personId') personId: string) {
     return this.sessionsService.getSessionsForPerson(personId);
   }
+
+  @Post(':id/call-log')
+  async logCall(@Param('id') id: string, @Body() data: { personId: string; status: string; remark?: string; calledBy?: string }) {
+    return this.sessionsService.updatePersonCall({
+      ...data,
+      sessionId: id,
+    });
+  }
 }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PeopleService } from '../people/people.service';
 
 interface SyncPayload {
   entityType: 'contact' | 'callLog' | 'task';
@@ -17,10 +16,7 @@ interface SyncBatchRequest {
 
 @Injectable()
 export class SyncService {
-  constructor(
-    private prisma: PrismaService,
-    private peopleService: PeopleService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async processBatch(body: SyncBatchRequest) {
     const results = { processed: 0, failed: 0, errors: [] as { entityId: string; error: string }[] };
@@ -59,7 +55,6 @@ export class SyncService {
       case 'create': {
         const existing = await this.prisma.person.findUnique({ where: { id: op.entityId } });
         if (existing) {
-          // Update instead of creating duplicate
           return this.prisma.person.update({
             where: { id: op.entityId },
             data: this.mapContactData(op.data) as any,
@@ -99,32 +94,50 @@ export class SyncService {
       throw new Error(`Person not found: ${op.entityId}`);
     }
 
-    let callHistory: any[] = [];
-    try {
-      callHistory = JSON.parse(person.callHistory || '[]');
-    } catch {}
+    const callData = op.data as any;
 
     switch (op.operation) {
       case 'create':
       case 'update': {
-        const logIndex = callHistory.findIndex((l: any) => l.id === (op.data as any).id);
-        if (logIndex >= 0) {
-          callHistory[logIndex] = { ...callHistory[logIndex], ...op.data };
-        } else {
-          callHistory.push(op.data);
-        }
+        await this.prisma.callLog.upsert({
+          where: { id: callData.id || op.entityId },
+          create: {
+            id: callData.id || op.entityId,
+            personId: op.entityId,
+            status: callData.status || 'unknown',
+            remark: callData.remark,
+            calledBy: callData.calledBy || callData.callerId,
+            calledAt: callData.calledAt ? new Date(callData.calledAt) : new Date(),
+            sessionId: callData.sessionId,
+          },
+          update: {
+            status: callData.status,
+            remark: callData.remark,
+            calledBy: callData.calledBy || callData.callerId,
+          },
+        });
+
+        // Update denormalized call stats
+        await this.prisma.person.update({
+          where: { id: op.entityId },
+          data: {
+            lastCallAt: new Date(),
+            lastCallStatus: callData.status || person.lastCallStatus,
+            lastCallRemark: callData.remark ?? person.lastCallRemark,
+            lastSyncTimestamp: BigInt(Date.now()),
+          },
+        });
         break;
       }
       case 'delete': {
-        callHistory = callHistory.filter((l: any) => l.id !== (op.data as any).id);
+        await this.prisma.callLog.deleteMany({
+          where: { id: callData.id || op.entityId, personId: op.entityId },
+        });
         break;
       }
     }
 
-    return this.prisma.person.update({
-      where: { id: op.entityId },
-      data: { callHistory: JSON.stringify(callHistory), lastSyncTimestamp: BigInt(Date.now()) },
-    });
+    return { success: true };
   }
 
   private async processTaskOp(op: SyncPayload) {
@@ -133,31 +146,40 @@ export class SyncService {
       throw new Error(`Person not found: ${op.entityId}`);
     }
 
-    let progress: any[] = [];
-    try {
-      progress = JSON.parse(person.progress || '[]');
-    } catch {}
+    const taskData = op.data as any;
 
     switch (op.operation) {
       case 'create':
       case 'update': {
-        const taskIndex = progress.findIndex((t: any) => t.id === (op.data as any).id);
-        if (taskIndex >= 0) {
-          progress[taskIndex] = { ...progress[taskIndex], ...op.data };
-        } else {
-          progress.push(op.data);
-        }
+        await this.prisma.personStageHistory.upsert({
+          where: { id: taskData.id || op.entityId },
+          create: {
+            id: taskData.id || op.entityId,
+            personId: op.entityId,
+            stage: taskData.stage || person.currentFolkStage,
+            note: taskData.note || taskData.remark,
+            changedBy: taskData.changedBy,
+            changedAt: taskData.changedAt ? new Date(taskData.changedAt) : new Date(),
+          },
+          update: {
+            stage: taskData.stage,
+            note: taskData.note || taskData.remark,
+            changedBy: taskData.changedBy,
+          },
+        });
         break;
       }
       case 'delete': {
-        progress = progress.filter((t: any) => t.id !== (op.data as any).id);
+        await this.prisma.personStageHistory.deleteMany({
+          where: { id: taskData.id || op.entityId, personId: op.entityId },
+        });
         break;
       }
     }
 
     return this.prisma.person.update({
       where: { id: op.entityId },
-      data: { progress: JSON.stringify(progress), lastSyncTimestamp: BigInt(Date.now()) },
+      data: { lastSyncTimestamp: BigInt(Date.now()) },
     });
   }
 
@@ -174,7 +196,6 @@ export class SyncService {
     const mapped: Record<string, any> = {};
     const fieldMap: Record<string, string> = {
       fullName: 'fullName',
-      fullNameLowercase: 'fullNameLowercase',
       phone: 'phone',
       photoUrl: 'photoUrl',
       age: 'age',
@@ -186,7 +207,6 @@ export class SyncService {
       rentDetails: 'rentDetails',
       nativePlace: 'nativePlace',
       sgRating: 'sgRating',
-      contactSource: 'contactSource',
       chantingStatus: 'chantingStatus',
       fromOtherCamp: 'fromOtherCamp',
       enablerInTouchWith: 'enablerInTouchWith',
@@ -194,10 +214,7 @@ export class SyncService {
       folkGuide: 'folkGuide',
       folkGuideId: 'folkGuideId',
       folkId: 'folkId',
-      progress: 'progress',
       generalRemarks: 'generalRemarks',
-      callHistory: 'callHistory',
-      attendanceHistory: 'attendanceHistory',
       relationshipStatus: 'relationshipStatus',
       verifiedByFg: 'verifiedByFg',
       isDeleted: 'isDeleted',
@@ -209,10 +226,7 @@ export class SyncService {
       lastFrp: 'lastFrp',
       nextFollowUpAt: 'nextFollowUpAt',
       reminderSetName: 'reminderSetName',
-      activeCoEnablerSessionId: 'activeCoEnablerSessionId',
-      coEnablerId: 'coEnablerId',
-      coEnablerName: 'coEnablerName',
-      coEnablerExpiry: 'coEnablerExpiry',
+      coEnablerSessionId: 'coEnablerSessionId',
       customData: 'customData',
     };
 
@@ -221,10 +235,6 @@ export class SyncService {
       if (value !== undefined) {
         mapped[dbField] = value;
       }
-    }
-
-    if (!mapped.fullNameLowercase && mapped.fullName) {
-      mapped.fullNameLowercase = String(mapped.fullName).toLowerCase();
     }
 
     return mapped;

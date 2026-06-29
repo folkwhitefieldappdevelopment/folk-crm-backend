@@ -57,21 +57,6 @@ export class EventsService {
       });
     }
 
-    const history = JSON.parse(person.attendanceHistory || '[]');
-    const groupData = group;
-    history.push({
-      groupId,
-      eventId,
-      groupName: groupData.name,
-      eventName: eventId ? (await this.prisma.groupEvent.findUnique({ where: { id: eventId } }))?.name : groupData.name,
-      date: attendanceDate,
-      timestamp: new Date().toISOString(),
-    });
-    await this.prisma.person.update({
-      where: { id: personId },
-      data: { attendanceHistory: JSON.stringify(history) },
-    });
-
     return { success: true, message: 'Attendance marked.' };
   }
 
@@ -85,16 +70,6 @@ export class EventsService {
       await this.prisma.groupEvent.update({
         where: { id: eventId },
         data: { attendeeCount: count },
-      });
-    }
-
-    const person = await this.prisma.person.findUnique({ where: { id: personId } });
-    if (person) {
-      const history = JSON.parse(person.attendanceHistory || '[]');
-      const newHistory = history.filter((e: any) => !(e.groupId === groupId && e.eventId === eventId));
-      await this.prisma.person.update({
-        where: { id: personId },
-        data: { attendanceHistory: JSON.stringify(newHistory) },
       });
     }
 

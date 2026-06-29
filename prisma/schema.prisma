@@ -1,6 +1,3 @@
-// Prisma Schema for FOLK Spiritual Gems CRM
-// PostgreSQL Database (production on Railway)
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
@@ -12,39 +9,36 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Users Table
 model User {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  phone         String   @default("")
-  password      String?  // bcrypt hashed
-  role          String   @default("[]") // JSON array
-  photoUrl      String?
-  createdAt     DateTime @default(now())
-  fgCode        String?
-  reportsTo     String?  // JSON
-  pausedCallingSession String? // JSON
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String   @default("")
+  password  String?
+  role      String   @default("[]")
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  fgCode    String?
+  reportsTo String?
+  pausedCallingSession String?
   whatsappTemplate String?
 
-  // Relations
-  ownedGroups        Group[]           @relation("GroupOwner")
-  createdCallingSessions CallingSession[] @relation("SessionCreator")
-  assignedCallingSessions CallingSession[] @relation("SessionAssigner")
-  folkGuideSessions  CallingSession[] @relation("FolkGuideSessions")
-  notifications      Notification[]
-  peopleAsEnabler    Person[]          @relation("EnablerRelation")
-  peopleAsFolkGuide  Person[]          @relation("FolkGuideRelation")
-  peopleAsCoEnabler  Person[]          @relation("CoEnablerRelation")
-
+  ownedGroups            Group[]              @relation("GroupOwner")
+  createdCallingSessions CallingSession[]     @relation("SessionCreator")
+  assignedCallingSessions CallingSession[]    @relation("SessionAssigner")
+  folkGuideSessions      CallingSession[]    @relation("FolkGuideSessions")
+  notifications          Notification[]
+  peopleAsEnabler        Person[]             @relation("EnablerRelation")
+  peopleAsFolkGuide      Person[]             @relation("FolkGuideRelation")
+  callingSessionEnablers CallingSessionEnabler[]
+  assignedGroups         Group[]              @relation("GroupAssigner")
+  sharedGroups           GroupSharedUser[]
   @@map("users")
 }
 
-// People (Contacts) Table
 model Person {
   id            String   @id @default(uuid())
   fullName      String   @default("Unknown Contact")
-  fullNameLowercase String @default("")
   phone         String
   photoUrl      String?
   age           Int      @default(0)
@@ -56,7 +50,6 @@ model Person {
   rentDetails   Float    @default(0)
   nativePlace   String?
   sgRating      Float    @default(0)
-  contactSource String   @default("[]") // JSON array
   chantingStatus Int     @default(0)
   fromOtherCamp Boolean  @default(false)
   enablerInTouchWith String @default("")
@@ -65,10 +58,8 @@ model Person {
   folkGuideId   String?
   folkId        String   @default("")
   createdAt     DateTime @default(now())
-  progress      String   @default("[]") // JSON ProgressCategory[]
+  updatedAt     DateTime @updatedAt
   generalRemarks String?
-  callHistory   String   @default("[]") // JSON CallLog[]
-  attendanceHistory String @default("[]") // JSON AttendanceEntry[]
   relationshipStatus String @default("Single")
   verifiedByFg  String   @default("No")
   isDeleted     Boolean  @default(false)
@@ -82,22 +73,21 @@ model Person {
   lastFrp       String?
   nextFollowUpAt String?
   reminderSetName String?
-  activeCoEnablerSessionId String?
-  coEnablerId   String?
-  coEnablerName String?
-  coEnablerExpiry String?
-  customData    String   @default("{}") // JSON
+  coEnablerSessionId String?
+  customData    String   @default("{}")
 
-  // Relations
   enabler       User?    @relation("EnablerRelation", fields: [enablerId], references: [id])
   folkGuideUser User?    @relation("FolkGuideRelation", fields: [folkGuideId], references: [id])
-  coEnabler     User?    @relation("CoEnablerRelation", fields: [coEnablerId], references: [id])
+  coEnablerSession CoEnablerSession? @relation("ActiveCoEnablerSession", fields: [coEnablerSessionId], references: [id])
   groupMembers  GroupMember[]
   attendance    Attendance[]
   sessions      CallingSessionPerson[]
+  callLogs      CallLog[]
+  stageHistory  PersonStageHistory[]
+  contactSources PersonContactSource[]
+  coEnablerSessionPeople CoEnablerSessionPerson[]
 
   @@index([phone])
-  @@index([fullNameLowercase])
   @@index([enablerId])
   @@index([folkGuideId])
   @@index([currentFolkStage])
@@ -105,10 +95,10 @@ model Person {
   @@index([createdAt])
   @@index([lastCallAt])
   @@index([nextFollowUpAt])
+  @@index([coEnablerSessionId])
   @@map("people")
 }
 
-// Groups Table
 model Group {
   id            String   @id @default(uuid())
   name          String
@@ -116,34 +106,33 @@ model Group {
   photoUrl      String?
   createdBy     String?
   createdByName String   @default("")
-  creatorRole   String   @default("[]") // JSON array
-  sharedWithUserIds String @default("[]") // JSON array
-  visibility    String   @default("[]") // JSON array
+  creatorRole   String   @default("[]")
+  visibility    String   @default("[]")
   memberCount   Int      @default(0)
   isDynamic     Boolean  @default(false)
   color         String?
   expiresAt     DateTime?
   task          String?
-  assignedBy    String?
-  assignedByName String?
-  assignedToName String?
+  assignedById  String?
   reportingEnabled Boolean @default(false)
   reportTime    String?
-  reportRecipients String @default("[]") // JSON array
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relations
-  owner         User?    @relation("GroupOwner", fields: [createdBy], references: [id])
-  members       GroupMember[]
-  events        GroupEvent[]
-  attendance    Attendance[]
+  owner           User?                  @relation("GroupOwner", fields: [createdBy], references: [id])
+  assigner        User?                  @relation("GroupAssigner", fields: [assignedById], references: [id])
+  members         GroupMember[]
+  events          GroupEvent[]
+  attendance      Attendance[]
+  sharedUsers     GroupSharedUser[]
+  reportRecipients GroupReportRecipient[]
 
   @@map("groups")
 }
 
-// Group Members (Junction Table)
 model GroupMember {
   groupId   String
-  personId  String @map("contactId")
+  personId  String
 
   group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
@@ -152,24 +141,42 @@ model GroupMember {
   @@map("group_members")
 }
 
-// Group Events Table
+model GroupSharedUser {
+  groupId String
+  userId  String
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("group_shared_users")
+}
+
+model GroupReportRecipient {
+  id      String @id @default(uuid())
+  groupId String
+  email   String
+
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("group_report_recipients")
+}
+
 model GroupEvent {
   id            String   @id @default(uuid())
   groupId       String
   name          String
   date          String
   createdAt     DateTime @default(now())
-  linkInfo      String?  // JSON
+  linkInfo      String?
   attendeeCount Int      @default(0)
 
-  // Relations
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  attendance    Attendance[]
+  group      Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attendance Attendance[]
 
   @@map("group_events")
 }
 
-// Attendance Table
 model Attendance {
   id        String   @id @default(uuid())
   personId  String
@@ -178,15 +185,66 @@ model Attendance {
   markedAt  DateTime @default(now())
   date      String
 
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  person    Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  group     Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
   event     GroupEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@unique([personId, eventId])
+  @@index([personId, eventId])
+  @@index([markedAt])
   @@map("attendance")
 }
 
-// Calling Sessions Table
+model CallLog {
+  id          String   @id @default(uuid())
+  personId    String
+  sessionId   String?
+  calledAt    DateTime @default(now())
+  status      String
+  remark      String?
+  calledBy    String?
+
+  person      Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([calledAt])
+  @@map("call_logs")
+}
+
+model PersonStageHistory {
+  id        String   @id @default(uuid())
+  personId  String
+  stage     String
+  note      String?
+  changedAt DateTime @default(now())
+  changedBy String?
+
+  person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("person_stage_history")
+}
+
+model ContactSource {
+  id   String @id @default(uuid())
+  name String @unique
+
+  people PersonContactSource[]
+
+  @@map("contact_sources")
+}
+
+model PersonContactSource {
+  personId        String
+  contactSourceId String
+
+  person          Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  contactSource   ContactSource @relation(fields: [contactSourceId], references: [id], onDelete: Cascade)
+
+  @@id([personId, contactSourceId])
+  @@map("person_contact_sources")
+}
+
 model CallingSession {
   id            String   @id @default(uuid())
   name          String
@@ -199,13 +257,13 @@ model CallingSession {
   folkGuideId   String?
   lastActivity  DateTime @default(now())
   createdAt     DateTime @default(now())
-  coEnablerIds  String   @default("[]") // JSON array
+  updatedAt     DateTime @updatedAt
 
-  // Relations
   creator       User     @relation("SessionCreator", fields: [createdBy], references: [id])
   assigner      User?    @relation("SessionAssigner", fields: [assignedById], references: [id])
   folkGuide     User?    @relation("FolkGuideSessions", fields: [folkGuideId], references: [id])
   people        CallingSessionPerson[]
+  enablers      CallingSessionEnabler[]
 
   @@index([status])
   @@index([createdBy])
@@ -214,20 +272,29 @@ model CallingSession {
   @@map("calling_sessions")
 }
 
-// Calling Session People (Junction Table)
 model CallingSessionPerson {
-  id          String @id @default(uuid())
-  sessionId   String
-  personId    String
+  id        String @id @default(uuid())
+  sessionId String
+  personId  String
 
-  session     CallingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  person      Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  session   CallingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  person    Person         @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, personId])
   @@map("calling_session_people")
 }
 
-// Push Tokens Table
+model CallingSessionEnabler {
+  sessionId String
+  userId    String
+
+  session   CallingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@map("calling_session_enablers")
+}
+
 model PushToken {
   id        String   @id @default(uuid())
   userId    String
@@ -240,37 +307,47 @@ model PushToken {
   @@map("push_tokens")
 }
 
-// Co-Enabler Sessions Table
 model CoEnablerSession {
-  id            String   @id @default(uuid())
-  name          String
-  task          String   @default("")
-  type          String   @default("external")
-  expiresAt     DateTime
-  creatorId     String?
-  creatorName   String   @default("")
-  peopleIds     String   @default("[]") // JSON array
+  id          String   @id @default(uuid())
+  name        String
+  task        String   @default("")
+  type        String   @default("external")
+  expiresAt   DateTime
+  creatorId   String?
+  creatorName String   @default("")
+
+  people      CoEnablerSessionPerson[]
+  activePeople Person[]                 @relation("ActiveCoEnablerSession")
 
   @@map("co_enabler_sessions")
 }
 
-// Settings Table (Single Document)
+model CoEnablerSessionPerson {
+  sessionId String
+  personId  String
+
+  session   CoEnablerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  person    Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, personId])
+  @@map("co_enabler_session_people")
+}
+
 model Setting {
-  id            String   @id @default("options")
-  contactSources String  @default("[]") // JSON array
-  folkStages    String   @default("[]") // JSON array
-  occupationStatuses String @default("[]") // JSON array
-  stayingWithOptions String @default("[]") // JSON array
-  customPersonFields String @default("[]") // JSON array
-  sgOptions     String   @default("[]") // JSON array
-  maOptions     String   @default("[]") // JSON array
-  frpOptions    String   @default("[]") // JSON array
-  activityFieldLabels String @default("{}") // JSON
+  id                  String @id @default("options")
+  contactSources      String @default("[]")
+  folkStages          String @default("[]")
+  occupationStatuses  String @default("[]")
+  stayingWithOptions  String @default("[]")
+  customPersonFields  String @default("[]")
+  sgOptions           String @default("[]")
+  maOptions           String @default("[]")
+  frpOptions          String @default("[]")
+  activityFieldLabels String @default("{}")
 
   @@map("settings")
 }
 
-// Audit Logs Table
 model Audit {
   id        String   @id @default(uuid())
   userId    String   @default("system")
@@ -283,10 +360,9 @@ model Audit {
   @@map("audits")
 }
 
-// Mail Queue Table
 model Mail {
   id        String   @id @default(uuid())
-  to        String   // JSON array of email addresses
+  to        String
   subject   String
   html      String
   createdAt DateTime @default(now())
@@ -294,20 +370,19 @@ model Mail {
   @@map("mail")
 }
 
-// Notifications Table
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  timestamp DateTime @default(now())
-  isRead    Boolean  @default(false)
-  type      String   @default("info")
-  senderId  String?
+  id         String   @id @default(uuid())
+  userId     String
+  title      String
+  message    String
+  timestamp  DateTime @default(now())
+  isRead     Boolean  @default(false)
+  type       String   @default("info")
+  senderId   String?
   senderName String?
-  personId  String?
+  personId   String?
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([timestamp])

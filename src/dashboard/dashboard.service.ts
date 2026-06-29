@@ -48,19 +48,30 @@ export class DashboardService {
       }),
     ]);
 
+    // Fetch active people with their call logs and stage history
     const activePeople = await this.prisma.person.findMany({
       where: {
         ...baseWhere,
         lastCallAt: { gte: startDate, lte: endDate },
+      },
+      include: {
+        callLogs: {
+          where: {
+            calledAt: { gte: startDate, lte: endDate },
+          },
+          orderBy: { calledAt: 'desc' },
+        },
+        stageHistory: {
+          orderBy: { changedAt: 'desc' },
+        },
       },
       take: 1000,
     });
 
     const activePersonList = activePeople.map(p => ({
       ...p,
-      callHistory: JSON.parse(p.callHistory || '[]'),
-      attendanceHistory: JSON.parse(p.attendanceHistory || '[]'),
-      progress: JSON.parse(p.progress || '[]'),
+      callHistory: p.callLogs,
+      progress: p.stageHistory,
     }));
 
     const report = this.buildCallingReport(activePersonList, userId || undefined, startDate, endDate);
@@ -133,14 +144,13 @@ export class DashboardService {
       personList.forEach(p => {
         const logsInRange = (p.callHistory || []).filter((log: any) => {
           const date = log.calledAt ? new Date(log.calledAt) : null;
-          const matchesUser = !userFilter || log.callerId === userFilter;
+          const matchesUser = !userFilter || log.calledBy === userFilter;
           return date && date >= start && date <= end && matchesUser;
         });
 
         logsInRange.forEach((log: any) => {
           const status = log.status || 'B - Not Answering';
-          const eventName = log.event || 'Manual Call';
-          const callerName = log.callerName || 'System';
+          const callerName = log.calledBy || 'System';
 
           report.totalCalls++;
           const isSuccess = ['A1 - Coming', 'Z - Already Attended', 'A4 - Tentative'].includes(status);
@@ -152,13 +162,12 @@ export class DashboardService {
 
           if (report.subCategories.hasOwnProperty(status)) {
             report.subCategories[status]++;
-            const uniqueKey = `${eventName}_${callerName}`;
+            const uniqueKey = `Call_${callerName}`;
             if (!report.detailedBreakdown[status][uniqueKey]) {
               report.detailedBreakdown[status][uniqueKey] = {
-                count: 0, event: eventName, callerName,
+                count: 0, event: 'Manual Call', callerName,
                 enablerName: p.enablerInTouchWith,
                 fgName: p.folkGuide,
-                coEnablerName: (p as any).coEnablerName,
               };
             }
             report.detailedBreakdown[status][uniqueKey].count++;

@@ -6,26 +6,41 @@ function tryParseJson(val: string, fallback: any) {
   try { return JSON.parse(val); } catch { return fallback; }
 }
 
-function parsePersonJsonFields(person: any) {
+const personInclude = {
+  callLogs: {
+    orderBy: { calledAt: 'desc' as const },
+    take: 20,
+  },
+  attendance: {
+    orderBy: { markedAt: 'desc' as const },
+  },
+  stageHistory: {
+    orderBy: { changedAt: 'desc' as const },
+  },
+  contactSources: {
+    include: { contactSource: true },
+  },
+  coEnablerSession: true,
+  coEnablerSessionPeople: {
+    include: { session: true },
+  },
+  enabler: true,
+  folkGuideUser: true,
+  groupMembers: {
+    include: { group: true },
+  },
+};
+
+function formatPerson(person: any) {
   if (!person) return person;
   return {
     ...person,
-    contactSource: typeof person.contactSource === 'string' ? tryParseJson(person.contactSource || '[]', []) : person.contactSource ?? [],
-    progress: typeof person.progress === 'string' ? tryParseJson(person.progress || '[]', []) : person.progress ?? [],
-    callHistory: typeof person.callHistory === 'string' ? tryParseJson(person.callHistory || '[]', []) : person.callHistory ?? [],
-    attendanceHistory: typeof person.attendanceHistory === 'string' ? tryParseJson(person.attendanceHistory || '[]', []) : person.attendanceHistory ?? [],
+    callHistory: person.callLogs ?? [],
+    attendanceHistory: person.attendance ?? [],
+    progress: person.stageHistory ?? [],
+    contactSource: person.contactSources?.map((cs: any) => cs.contactSource.name) ?? [],
     customData: typeof person.customData === 'string' ? tryParseJson(person.customData || '{}', {}) : person.customData ?? {},
   };
-}
-
-function preparePersonForDb(data: any) {
-  const dbData = { ...data };
-  if (dbData.contactSource && typeof dbData.contactSource !== 'string') dbData.contactSource = JSON.stringify(dbData.contactSource);
-  if (dbData.progress && typeof dbData.progress !== 'string') dbData.progress = JSON.stringify(dbData.progress);
-  if (dbData.callHistory && typeof dbData.callHistory !== 'string') dbData.callHistory = JSON.stringify(dbData.callHistory);
-  if (dbData.attendanceHistory && typeof dbData.attendanceHistory !== 'string') dbData.attendanceHistory = JSON.stringify(dbData.attendanceHistory);
-  if (dbData.customData && typeof dbData.customData !== 'string') dbData.customData = JSON.stringify(dbData.customData);
-  return dbData;
 }
 
 @Injectable()
@@ -46,44 +61,78 @@ export class PeopleService {
       cursor,
       where,
       orderBy,
+      include: personInclude,
     });
-    return people.map(parsePersonJsonFields);
+    return people.map(formatPerson);
   }
 
   async findOne(id: string) {
     const person = await this.prisma.person.findUnique({
       where: { id },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
   async findByPhone(phone: string) {
     const person = await this.prisma.person.findFirst({
       where: { phone },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
-  async create(data: Prisma.PersonCreateInput) {
+  async create(data: any) {
+    const { contactSource, progress, callHistory, attendanceHistory, customData, contactSources, ...personData } = data;
+
     const person = await this.prisma.person.create({
-      data: preparePersonForDb(data),
+      data: {
+        ...personData,
+        customData: typeof customData === 'object' ? JSON.stringify(customData || {}) : (customData || '{}'),
+        contactSources: contactSource?.length
+          ? {
+              create: await this.resolveContactSources(contactSource),
+            }
+          : undefined,
+      },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
-  async update(id: string, data: Prisma.PersonUpdateInput) {
+  async update(id: string, data: any) {
+    const { contactSource, progress, callHistory, attendanceHistory, customData, ...personData } = data;
+
+    // Handle contact sources replacement
+    if (contactSource !== undefined) {
+      await this.prisma.personContactSource.deleteMany({ where: { personId: id } });
+      if (Array.isArray(contactSource) && contactSource.length > 0) {
+        const sources = await this.resolveContactSources(contactSource);
+        await this.prisma.personContactSource.createMany({
+          data: sources.map(s => ({ personId: id, contactSourceId: s.contactSourceId })),
+        });
+      }
+    }
+
     const person = await this.prisma.person.update({
       where: { id },
-      data: preparePersonForDb(data),
+      data: {
+        ...personData,
+        customData: customData !== undefined
+          ? (typeof customData === 'object' ? JSON.stringify(customData) : customData)
+          : undefined,
+      },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
   async delete(id: string) {
     const person = await this.prisma.person.delete({
       where: { id },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
   async softDelete(id: string) {
@@ -93,29 +142,29 @@ export class PeopleService {
         isDeleted: true,
         deletedAt: new Date(),
       },
+      include: personInclude,
     });
-    return parsePersonJsonFields(person);
+    return formatPerson(person);
   }
 
   async count(where?: Prisma.PersonWhereInput) {
-    return this.prisma.person.count({
-      where,
-    });
+    return this.prisma.person.count({ where });
   }
 
   async search(query: string) {
     const people = await this.prisma.person.findMany({
       where: {
         OR: [
-          { fullName: { contains: query } },
+          { fullName: { contains: query, mode: 'insensitive' } },
           { phone: { contains: query } },
           { location: { contains: query } },
         ],
         isDeleted: false,
       },
       take: 50,
+      include: personInclude,
     });
-    return people.map(parsePersonJsonFields);
+    return people.map(formatPerson);
   }
 
   async getStats() {
@@ -138,5 +187,41 @@ export class PeopleService {
         count: s._count,
       })),
     };
+  }
+
+  async addCallLog(personId: string, data: { status: string; remark?: string; calledBy?: string; sessionId?: string }) {
+    return this.prisma.callLog.create({
+      data: {
+        personId,
+        status: data.status,
+        remark: data.remark,
+        calledBy: data.calledBy,
+        sessionId: data.sessionId,
+      },
+    });
+  }
+
+  async addStageHistory(personId: string, data: { stage: string; note?: string; changedBy?: string }) {
+    return this.prisma.personStageHistory.create({
+      data: {
+        personId,
+        stage: data.stage,
+        note: data.note,
+        changedBy: data.changedBy,
+      },
+    });
+  }
+
+  private async resolveContactSources(sources: string[]): Promise<{ contactSourceId: string }[]> {
+    const result: { contactSourceId: string }[] = [];
+    for (const name of sources) {
+      const cs = await this.prisma.contactSource.upsert({
+        where: { name },
+        create: { name },
+        update: {},
+      });
+      result.push({ contactSourceId: cs.id });
+    }
+    return result;
   }
 }

@@ -3,22 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 
-function tryParseJson(val: string, fallback: any) {
-  try { return JSON.parse(val); } catch { return fallback; }
-}
-
-function parsePersonJsonFields(person: any) {
-  if (!person) return person;
-  return {
-    ...person,
-    contactSource: typeof person.contactSource === 'string' ? tryParseJson(person.contactSource || '[]', []) : person.contactSource ?? [],
-    progress: typeof person.progress === 'string' ? tryParseJson(person.progress || '[]', []) : person.progress ?? [],
-    callHistory: typeof person.callHistory === 'string' ? tryParseJson(person.callHistory || '[]', []) : person.callHistory ?? [],
-    attendanceHistory: typeof person.attendanceHistory === 'string' ? tryParseJson(person.attendanceHistory || '[]', []) : person.attendanceHistory ?? [],
-    customData: typeof person.customData === 'string' ? tryParseJson(person.customData || '{}', {}) : person.customData ?? {},
-  };
-}
-
 @Injectable()
 export class ReportService {
   private readonly logger = new Logger(ReportService.name);
@@ -36,6 +20,7 @@ export class ReportService {
 
     const groups = await this.prisma.group.findMany({
       where: { reportingEnabled: true },
+      include: { reportRecipients: true },
     });
 
     for (const group of groups) {
@@ -67,8 +52,21 @@ export class ReportService {
       where: { id: groupId },
       include: {
         members: {
-          include: { person: true },
+          include: {
+            person: {
+              include: {
+                callLogs: {
+                  orderBy: { calledAt: 'desc' },
+                  take: 50,
+                },
+                attendance: {
+                  orderBy: { markedAt: 'desc' },
+                },
+              },
+            },
+          },
         },
+        reportRecipients: true,
       },
     });
 
@@ -76,14 +74,12 @@ export class ReportService {
       return { sent: false, reason: 'Group not found' };
     }
 
-    const recipients = tryParseJson(group.reportRecipients || '[]', []);
-    if (!Array.isArray(recipients) || recipients.length === 0) {
+    const recipients = group.reportRecipients.map(r => r.email);
+    if (recipients.length === 0) {
       return { sent: false, reason: 'No recipients configured' };
     }
 
-    const members = group.members
-      .map(m => parsePersonJsonFields(m.person))
-      .filter(Boolean);
+    const members = group.members.map(m => m.person).filter(Boolean);
 
     const html = this.generateReportHtml(group, members);
 
@@ -117,12 +113,12 @@ export class ReportService {
     const memberRows = people.map(p => {
       const lastCall = p.lastCallAt ? new Date(p.lastCallAt) : null;
       const daysSince = lastCall ? Math.floor((now.getTime() - lastCall.getTime()) / 86400000) : 999;
-      const callHistory = p.callHistory || [];
+      const callHistory = p.callLogs || [];
       const recentCalls = callHistory.filter((c: any) => {
         const d = c.calledAt ? new Date(c.calledAt) : null;
         return d && (now.getTime() - d.getTime()) < 30 * 86400000;
       });
-      const attCount = p.attendanceHistory?.length || 0;
+      const attCount = p.attendance?.length || 0;
 
       let badge = '<span style="background:#4CAF50;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;">Active</span>';
       if (daysSince > 7) {

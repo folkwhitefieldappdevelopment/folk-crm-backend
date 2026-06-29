@@ -18,6 +18,9 @@ export class CallingSessionsService {
         people: {
           include: { person: true },
         },
+        enablers: {
+          include: { user: true },
+        },
       },
     });
   }
@@ -28,6 +31,9 @@ export class CallingSessionsService {
       include: {
         people: {
           include: { person: true },
+        },
+        enablers: {
+          include: { user: true },
         },
       },
     });
@@ -55,7 +61,6 @@ export class CallingSessionsService {
         assignedById: data.assignedById,
         assignedByName: data.assignedByName || '',
         folkGuideId: data.folkGuideId,
-        coEnablerIds: JSON.stringify(data.coEnablerIds || []),
         people: data.peopleIds?.length
           ? {
               create: data.peopleIds.map(personId => ({
@@ -63,9 +68,17 @@ export class CallingSessionsService {
               })),
             }
           : undefined,
+        enablers: data.coEnablerIds?.length
+          ? {
+              create: data.coEnablerIds.map(userId => ({
+                userId,
+              })),
+            }
+          : undefined,
       },
       include: {
         people: true,
+        enablers: true,
       },
     });
     return session;
@@ -95,5 +108,57 @@ export class CallingSessionsService {
       take: 10,
       orderBy: { lastActivity: 'desc' },
     });
+  }
+
+  /**
+   * Log a call result for a person in a session.
+   * Writes to call_logs table instead of appending to people.callHistory JSON.
+   */
+  async updatePersonCall(data: {
+    personId: string;
+    sessionId?: string;
+    status: string;
+    remark?: string;
+    calledBy?: string;
+  }) {
+    // Write to call_logs table
+    const callLog = await this.prisma.callLog.create({
+      data: {
+        personId: data.personId,
+        sessionId: data.sessionId,
+        status: data.status,
+        remark: data.remark,
+        calledBy: data.calledBy,
+      },
+    });
+
+    // Update denormalized call stats on person
+    await this.prisma.person.update({
+      where: { id: data.personId },
+      data: {
+        lastCallAt: new Date(),
+        lastCallStatus: data.status,
+        lastCallRemark: data.remark,
+      },
+    });
+
+    // Advance session index
+    if (data.sessionId) {
+      const session = await this.prisma.callingSession.findUnique({
+        where: { id: data.sessionId },
+        select: { current_index: true, _count: { select: { people: true } } },
+      });
+      if (session && session.current_index < session._count.people - 1) {
+        await this.prisma.callingSession.update({
+          where: { id: data.sessionId },
+          data: {
+            current_index: { increment: 1 },
+            lastActivity: new Date(),
+          },
+        });
+      }
+    }
+
+    return callLog;
   }
 }
