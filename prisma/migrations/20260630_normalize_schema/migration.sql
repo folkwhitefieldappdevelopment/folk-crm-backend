@@ -92,7 +92,6 @@ SELECT
   gen_random_uuid()::text,
   p.id,
   CASE
-  CASE
     WHEN elem->'calledAt'->>'_seconds' IS NOT NULL THEN
       to_timestamp((elem->'calledAt'->>'_seconds')::bigint)
     WHEN elem->>'calledAt' ~ '^\d{4}-\d{2}-\d{2}' THEN
