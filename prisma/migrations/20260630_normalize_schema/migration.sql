@@ -76,10 +76,17 @@ CREATE TABLE IF NOT EXISTS co_enabler_session_people (
 -- ============================================================
 
 -- 2a. Migrate people.callHistory → call_logs
+-- Handles both ISO strings and Firestore timestamp objects: {"_seconds": N, "_nanoseconds": N}
 INSERT INTO call_logs ("personId", "calledAt", status, remark, "calledBy")
 SELECT
   p.id,
-  COALESCE((elem->>'calledAt')::timestamptz, p."lastCallAt", NOW()),
+  CASE
+    WHEN elem->'calledAt'->>'_seconds' IS NOT NULL THEN
+      to_timestamp((elem->'calledAt'->>'_seconds')::bigint)
+    WHEN elem->>'calledAt' ~ '^\d{4}-\d{2}-\d{2}' THEN
+      (elem->>'calledAt')::timestamptz
+    ELSE COALESCE(p."lastCallAt", NOW())
+  END,
   COALESCE(elem->>'status', p."lastCallStatus", 'unknown'),
   COALESCE(elem->>'remark', p."lastCallRemark"),
   elem->>'calledBy'
@@ -99,7 +106,13 @@ SELECT
   p.id,
   COALESCE(elem->>'stage', p."currentFolkStage"),
   elem->>'note',
-  COALESCE((elem->>'timestamp')::timestamptz, NOW())
+  CASE
+    WHEN elem->'timestamp'->>'_seconds' IS NOT NULL THEN
+      to_timestamp((elem->'timestamp'->>'_seconds')::bigint)
+    WHEN elem->>'timestamp' ~ '^\d{4}-\d{2}-\d{2}' THEN
+      (elem->>'timestamp')::timestamptz
+    ELSE NOW()
+  END
 FROM people p
 CROSS JOIN LATERAL json_array_elements(
   CASE WHEN p.progress IS NOT NULL AND p.progress != ''
