@@ -181,6 +181,7 @@ INSERT INTO co_enabler_session_people ("sessionId", "personId")
 SELECT ces.id, trim(elem::text, '"')
 FROM co_enabler_sessions ces
 CROSS JOIN LATERAL json_array_elements(safe_json_array(ces."peopleIds")) AS elem
+WHERE EXISTS (SELECT 1 FROM people WHERE id = trim(elem::text, '"'))
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
