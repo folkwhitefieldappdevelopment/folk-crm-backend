@@ -6,6 +6,16 @@ BEGIN;
 -- 1. CREATE NEW TABLES
 -- ============================================================
 
+-- Helper: safely parse a text column as JSON array, returning empty array on invalid input
+CREATE OR REPLACE FUNCTION safe_json_array(val TEXT) RETURNS json AS $$
+BEGIN
+  IF val IS NULL OR val = '' THEN RETURN '[]'::json; END IF;
+  IF val ~ '^\s*\[' THEN RETURN val::json; END IF;
+  RETURN ('["' || replace(val, '"', '\"') || '"]')::json;
+EXCEPTION WHEN OTHERS THEN RETURN '[]'::json;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- 1a. call_logs (replaces people.callHistory JSON)
 CREATE TABLE IF NOT EXISTS call_logs (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -91,14 +101,27 @@ SELECT
   COALESCE(elem->>'remark', p."lastCallRemark"),
   elem->>'calledBy'
 FROM people p
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN p."callHistory" IS NOT NULL AND p."callHistory" != ''
-       THEN p."callHistory"::json ELSE '[]'::json END
-) AS elem;
+CROSS JOIN LATERAL json_array_elements(safe_json_array(p."callHistory")) AS elem;
 
 -- 2b. Migrate people.attendanceHistory → attendance table
--- Skip: attendance table already exists. The JSON was a redundant copy.
--- Data is already in the attendance table from the original source.
+-- The attendance table may already have records, skip duplicates
+INSERT INTO attendance ("personId", "groupId", "eventId", date, "markedAt")
+SELECT DISTINCT ON (p.id, COALESCE(elem->>'eventId', ''), elem->>'date')
+  p.id,
+  COALESCE(elem->>'groupId', 'unknown'),
+  elem->>'eventId',
+  elem->>'date',
+  COALESCE(
+    CASE
+      WHEN elem->'timestamp'->>'_seconds' IS NOT NULL THEN to_timestamp((elem->'timestamp'->>'_seconds')::bigint)
+      WHEN elem->>'timestamp' ~ '^\d{4}-\d{2}-\d{2}' THEN (elem->>'timestamp')::timestamptz
+      ELSE NOW()
+    END,
+    NOW()
+  )
+FROM people p
+CROSS JOIN LATERAL json_array_elements(safe_json_array(p."attendanceHistory")) AS elem
+ON CONFLICT ("personId", "eventId") DO NOTHING;
 
 -- 2c. Migrate people.progress → person_stage_history
 INSERT INTO person_stage_history ("personId", stage, note, "changedAt")
@@ -114,30 +137,19 @@ SELECT
     ELSE NOW()
   END
 FROM people p
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN p.progress IS NOT NULL AND p.progress != ''
-       THEN p.progress::json ELSE '[]'::json END
-) AS elem;
+CROSS JOIN LATERAL json_array_elements(safe_json_array(p.progress)) AS elem;
 
 -- 2d. Migrate people.contactSource → person_contact_sources
--- First ensure all unique source names exist in contact_sources
 INSERT INTO contact_sources (name)
 SELECT DISTINCT trim(elem::text, '"')
 FROM people p
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN p."contactSource" IS NOT NULL AND p."contactSource" != ''
-       THEN p."contactSource"::json ELSE '[]'::json END
-) AS elem
+CROSS JOIN LATERAL json_array_elements(safe_json_array(p."contactSource")) AS elem
 ON CONFLICT (name) DO NOTHING;
 
--- Then create the join records
 INSERT INTO person_contact_sources ("personId", "contactSourceId")
 SELECT DISTINCT p.id, cs.id
 FROM people p
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN p."contactSource" IS NOT NULL AND p."contactSource" != ''
-       THEN p."contactSource"::json ELSE '[]'::json END
-) AS elem
+CROSS JOIN LATERAL json_array_elements(safe_json_array(p."contactSource")) AS elem
 JOIN contact_sources cs ON cs.name = trim(elem::text, '"')
 ON CONFLICT DO NOTHING;
 
@@ -145,39 +157,27 @@ ON CONFLICT DO NOTHING;
 INSERT INTO group_shared_users ("groupId", "userId")
 SELECT g.id, trim(elem::text, '"')
 FROM groups g
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN g."sharedWithUserIds" IS NOT NULL AND g."sharedWithUserIds" != ''
-       THEN g."sharedWithUserIds"::json ELSE '[]'::json END
-) AS elem
+CROSS JOIN LATERAL json_array_elements(safe_json_array(g."sharedWithUserIds")) AS elem
 ON CONFLICT DO NOTHING;
 
 -- 2f. Migrate groups.reportRecipients → group_report_recipients
 INSERT INTO group_report_recipients ("groupId", email)
 SELECT g.id, trim(elem::text, '"')
 FROM groups g
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN g."reportRecipients" IS NOT NULL AND g."reportRecipients" != ''
-       THEN g."reportRecipients"::json ELSE '[]'::json END
-) AS elem;
+CROSS JOIN LATERAL json_array_elements(safe_json_array(g."reportRecipients")) AS elem;
 
 -- 2g. Migrate calling_sessions.coEnablerIds → calling_session_enablers
 INSERT INTO calling_session_enablers ("sessionId", "userId")
 SELECT cs.id, trim(elem::text, '"')
 FROM calling_sessions cs
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN cs."coEnablerIds" IS NOT NULL AND cs."coEnablerIds" != ''
-       THEN cs."coEnablerIds"::json ELSE '[]'::json END
-) AS elem
+CROSS JOIN LATERAL json_array_elements(safe_json_array(cs."coEnablerIds")) AS elem
 ON CONFLICT DO NOTHING;
 
 -- 2h. Migrate co_enabler_sessions.peopleIds → co_enabler_session_people
 INSERT INTO co_enabler_session_people ("sessionId", "personId")
 SELECT ces.id, trim(elem::text, '"')
 FROM co_enabler_sessions ces
-CROSS JOIN LATERAL json_array_elements(
-  CASE WHEN ces."peopleIds" IS NOT NULL AND ces."peopleIds" != ''
-       THEN ces."peopleIds"::json ELSE '[]'::json END
-) AS elem
+CROSS JOIN LATERAL json_array_elements(safe_json_array(ces."peopleIds")) AS elem
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
