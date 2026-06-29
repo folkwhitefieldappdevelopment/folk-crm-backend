@@ -104,11 +104,11 @@ FROM people p
 CROSS JOIN LATERAL json_array_elements(safe_json_array(p."callHistory")) AS elem;
 
 -- 2b. Migrate people.attendanceHistory → attendance table
--- The attendance table may already have records, skip duplicates
+-- Skip records where the referenced group doesn't exist (foreign key constraint)
 INSERT INTO attendance ("personId", "groupId", "eventId", date, "markedAt")
 SELECT DISTINCT ON (p.id, COALESCE(elem->>'eventId', ''), elem->>'date')
   p.id,
-  COALESCE(elem->>'groupId', 'unknown'),
+  elem->>'groupId',
   elem->>'eventId',
   elem->>'date',
   COALESCE(
@@ -121,6 +121,7 @@ SELECT DISTINCT ON (p.id, COALESCE(elem->>'eventId', ''), elem->>'date')
   )
 FROM people p
 CROSS JOIN LATERAL json_array_elements(safe_json_array(p."attendanceHistory")) AS elem
+WHERE EXISTS (SELECT 1 FROM groups WHERE id = elem->>'groupId')
 ON CONFLICT ("personId", "eventId") DO NOTHING;
 
 -- 2c. Migrate people.progress → person_stage_history
