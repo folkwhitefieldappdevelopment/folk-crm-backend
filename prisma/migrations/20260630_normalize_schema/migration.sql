@@ -191,9 +191,12 @@ ON CONFLICT DO NOTHING;
 -- 3a. Add assignedById FK to groups (replaces assignedBy/assignedByName/assignedToName)
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS "assignedById" TEXT REFERENCES users(id);
 
--- 3b. Add updatedAt timestamps for conflict resolution
+-- 3b. Add timestamps for conflict resolution (original tables may lack createdAt)
+ALTER TABLE people ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP NOT NULL DEFAULT NOW();
 ALTER TABLE people ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW();
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP NOT NULL DEFAULT NOW();
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW();
+ALTER TABLE calling_sessions ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP NOT NULL DEFAULT NOW();
 ALTER TABLE calling_sessions ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW();
 
 -- 3c. Add coEnablerSessionId FK to people (replaces 4 denorm columns)
