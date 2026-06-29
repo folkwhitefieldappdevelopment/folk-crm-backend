@@ -114,6 +114,24 @@ export class PeopleService {
       }
     }
 
+    // Auto-insert stage history when currentFolkStage changes
+    if (personData.currentFolkStage !== undefined) {
+      const existing = await this.prisma.person.findUnique({
+        where: { id },
+        select: { currentFolkStage: true },
+      });
+      if (existing && existing.currentFolkStage !== personData.currentFolkStage) {
+        await this.prisma.personStageHistory.create({
+          data: {
+            personId: id,
+            stage: personData.currentFolkStage,
+            note: personData.stageChangeNote,
+            changedBy: personData.stageChangedBy,
+          },
+        });
+      }
+    }
+
     const person = await this.prisma.person.update({
       where: { id },
       data: {

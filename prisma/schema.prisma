@@ -33,6 +33,8 @@ model User {
   callingSessionEnablers CallingSessionEnabler[]
   assignedGroups         Group[]              @relation("GroupAssigner")
   sharedGroups           GroupSharedUser[]
+  callLogs               CallLog[]            @relation("CalledByUser")
+  stageHistories         PersonStageHistory[] @relation("StageChangedByUser")
   @@map("users")
 }
 
@@ -68,10 +70,7 @@ model Person {
   lastCallStatus String?
   lastCallRemark String?
   lastSyncTimestamp BigInt?
-  lastSg        String?
-  lastMa        String?
-  lastFrp       String?
-  nextFollowUpAt String?
+  nextFollowUpAt DateTime?
   reminderSetName String?
   coEnablerSessionId String?
   customData    String   @default("{}")
@@ -132,12 +131,13 @@ model Group {
 
 model GroupMember {
   groupId   String
-  personId  String
+  contactId String
 
   group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person    Person @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
-  @@id([groupId, personId])
+  @@id([groupId, contactId])
+  @@index([contactId], map: "idx_groupmembers_contactid")
   @@map("group_members")
 }
 
@@ -166,7 +166,7 @@ model GroupEvent {
   id            String   @id @default(uuid())
   groupId       String
   name          String
-  date          String
+  date          DateTime @db.Date
   createdAt     DateTime @default(now())
   linkInfo      String?
   attendeeCount Int      @default(0)
@@ -174,6 +174,7 @@ model GroupEvent {
   group      Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   attendance Attendance[]
 
+  @@index([groupId])
   @@map("group_events")
 }
 
@@ -183,7 +184,7 @@ model Attendance {
   groupId   String
   eventId   String?
   markedAt  DateTime @default(now())
-  date      String
+  date      DateTime @db.Date
 
   person    Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
   group     Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -191,37 +192,53 @@ model Attendance {
 
   @@unique([personId, eventId])
   @@index([personId, eventId])
+  @@index([personId])
+  @@index([eventId])
+  @@index([groupId])
   @@index([markedAt])
   @@map("attendance")
 }
 
 model CallLog {
-  id          String   @id @default(uuid())
-  personId    String
-  sessionId   String?
-  calledAt    DateTime @default(now())
-  status      String
-  remark      String?
-  calledBy    String?
+  id            String    @id @default(uuid())
+  personId      String
+  sessionId     String?
+  calledAt      DateTime  @default(now())
+  status        String
+  remark        String?
+  calledBy      String?
+  calledById    String?
+  sgRating      Float     @default(0)
+  maRating      Float     @default(0)
+  frpRating     Float     @default(0)
+  nextFollowUpAt DateTime?
 
-  person      Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person      Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  session     CallingSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  calledByUser User?           @relation("CalledByUser", fields: [calledById], references: [id], onDelete: SetNull)
 
   @@index([personId])
   @@index([calledAt])
+  @@index([calledById])
+  @@index([status])
+  @@index([sessionId])
   @@map("call_logs")
 }
 
 model PersonStageHistory {
-  id        String   @id @default(uuid())
-  personId  String
-  stage     String
-  note      String?
-  changedAt DateTime @default(now())
-  changedBy String?
+  id          String   @id @default(uuid())
+  personId    String
+  stage       String
+  note        String?
+  changedAt   DateTime @default(now())
+  changedBy   String?
+  changedById String?
 
-  person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  changedByUser User?  @relation("StageChangedByUser", fields: [changedById], references: [id], onDelete: SetNull)
 
   @@index([personId])
+  @@index([changedAt])
   @@map("person_stage_history")
 }
 
@@ -264,6 +281,7 @@ model CallingSession {
   folkGuide     User?    @relation("FolkGuideSessions", fields: [folkGuideId], references: [id])
   people        CallingSessionPerson[]
   enablers      CallingSessionEnabler[]
+  callLogs      CallLog[]
 
   @@index([status])
   @@index([createdBy])

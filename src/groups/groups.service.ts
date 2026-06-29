@@ -129,7 +129,7 @@ export class GroupsService {
     if (!group) throw new Error('Group not found');
 
     await this.prisma.groupMember.createMany({
-      data: personIds.map(personId => ({ groupId, personId })),
+      data: personIds.map(personId => ({ groupId, contactId: personId })),
     });
 
     const memberCount = await this.prisma.groupMember.count({ where: { groupId } });
@@ -152,7 +152,7 @@ export class GroupsService {
     const personIds = people.map(p => p.id);
     if (personIds.length > 0) {
       await this.prisma.groupMember.createMany({
-        data: personIds.map(personId => ({ groupId, personId })),
+        data: personIds.map(personId => ({ groupId, contactId: personId })),
       });
     }
 
@@ -163,7 +163,7 @@ export class GroupsService {
   }
 
   async removeMember(groupId: string, personId: string) {
-    await this.prisma.groupMember.deleteMany({ where: { groupId, personId } });
+    await this.prisma.groupMember.deleteMany({ where: { groupId, contactId: personId } });
 
     const memberCount = await this.prisma.groupMember.count({ where: { groupId } });
     await this.prisma.group.update({ where: { id: groupId }, data: { memberCount } });

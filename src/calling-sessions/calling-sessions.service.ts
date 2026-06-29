@@ -112,7 +112,7 @@ export class CallingSessionsService {
 
   /**
    * Log a call result for a person in a session.
-   * Writes to call_logs table instead of appending to people.callHistory JSON.
+   * Writes to call_logs table with all rating and follow-up fields.
    */
   async updatePersonCall(data: {
     personId: string;
@@ -120,6 +120,11 @@ export class CallingSessionsService {
     status: string;
     remark?: string;
     calledBy?: string;
+    calledById?: string;
+    sgRating?: number;
+    maRating?: number;
+    frpRating?: number;
+    nextFollowUpAt?: Date;
   }) {
     // Write to call_logs table
     const callLog = await this.prisma.callLog.create({
@@ -129,6 +134,11 @@ export class CallingSessionsService {
         status: data.status,
         remark: data.remark,
         calledBy: data.calledBy,
+        calledById: data.calledById,
+        sgRating: data.sgRating ?? 0,
+        maRating: data.maRating ?? 0,
+        frpRating: data.frpRating ?? 0,
+        nextFollowUpAt: data.nextFollowUpAt,
       },
     });
 
@@ -139,6 +149,7 @@ export class CallingSessionsService {
         lastCallAt: new Date(),
         lastCallStatus: data.status,
         lastCallRemark: data.remark,
+        nextFollowUpAt: data.nextFollowUpAt,
       },
     });
 
